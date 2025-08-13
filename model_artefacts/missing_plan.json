@@ -1,0 +1,78 @@
+{
+    "medianas": {
+        "idade": 55.0,
+        "limite_credito": 63000.0
+    },
+    "medianas_int": {
+        "discount_value": 5,
+        "min_value": 10,
+        "duration": 7
+    },
+    "categorias_add_missing": [
+        "genero",
+        "safra_registro",
+        "offer_type",
+        "web",
+        "email",
+        "mobile",
+        "social",
+        "recebeu_web",
+        "recebeu_email",
+        "recebeu_mobile",
+        "recebeu_social"
+    ],
+    "to_minus1": [
+        "dias_desde_ultima_transacao",
+        "dias_desde_ultima_oferta_recebida",
+        "dias_desde_ultima_oferta_visualizada",
+        "media_tempo_entre_transacoes",
+        "transacoes_distintas_dias"
+    ],
+    "to_zero": [
+        "historico_conversao",
+        "qtd_ofertas_anteriores",
+        "qtd_ofertas_visualizadas",
+        "qtd_ofertas_completas_validas",
+        "qtd_transacoes_7d",
+        "qtd_transacoes_14d",
+        "qtd_ofertas_recebidas_14d",
+        "qtd_ofertas_visualizadas_14d",
+        "qtd_conversoes_validas_14d",
+        "canais_recebidos_total",
+        "canais_preferidos",
+        "taxa_visualizacao",
+        "taxa_conversao",
+        "email_ratio_historico",
+        "taxa_visualizacao_historica_tipo",
+        "taxa_conversao_historica_tipo",
+        "taxa_visualizacao_historica_oferta",
+        "taxa_conversao_historica_canal_social",
+        "afinidade_canais_conv",
+        "taxa_conversao_historica_bucket_duracao",
+        "taxa_conversao_historica_bucket_desconto",
+        "taxa_conversao_historica_bucket_minimo",
+        "n_instancias_anteriores_mesma_oferta"
+    ],
+    "to_med": [
+        "idade",
+        "limite_credito"
+    ],
+    "to_medint": [
+        "discount_value",
+        "min_value",
+        "duration"
+    ],
+    "to_cat": [
+        "genero",
+        "safra_registro",
+        "offer_type",
+        "web",
+        "email",
+        "mobile",
+        "social",
+        "recebeu_web",
+        "recebeu_email",
+        "recebeu_mobile",
+        "recebeu_social"
+    ]
+}

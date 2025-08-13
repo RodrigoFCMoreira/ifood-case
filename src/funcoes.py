@@ -6,7 +6,7 @@ from sklearn.metrics import precision_recall_curve, auc
 from sklearn.metrics import roc_curve, auc
 from typing import Dict
 from typing import Tuple, List
-from pycaret.classification import setup, create_model
+#from pycaret.classification import setup, create_model
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Optional
@@ -17,7 +17,7 @@ from sklearn.pipeline import Pipeline
 import seaborn as sns
 from IPython.display import display
 from typing import Any
-from pycaret.classification import *
+#from pycaret.classification import *
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve, precision_recall_curve, auc
 from typing import Dict, Tuple

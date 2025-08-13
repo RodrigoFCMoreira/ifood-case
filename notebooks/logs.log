@@ -122,3 +122,94 @@ Try using .loc[row_indexer,col_indexer] = value instead
 See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
   train_selecionado["idade_missing"] = train_selecionado["idade"].isna().astype(int)
 
+2025-08-11 15:20:13,530:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-11 15:20:13,530:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-11 15:20:13,530:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-11 15:20:13,530:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-11 15:20:21,179:WARNING:/home/spark-1a1cca18-ba6b-4d6d-a84b-f1/.ipykernel/25268/command-5673609478037084-1407327369:47: UserWarning: FixedFormatter should only be used together with FixedLocator
+  ax1.set_xticklabels(safra_stats[safra_col].astype(str), rotation=45)
+
+2025-08-11 15:23:28,437:WARNING:/home/spark-1a1cca18-ba6b-4d6d-a84b-f1/.ipykernel/25268/command-5673609478037084-1407327369:47: UserWarning: FixedFormatter should only be used together with FixedLocator
+  ax1.set_xticklabels(safra_stats[safra_col].astype(str), rotation=45)
+
+2025-08-11 15:37:36,914:WARNING:/home/spark-1a1cca18-ba6b-4d6d-a84b-f1/.ipykernel/25268/command-8722994656789697-3974294902:5: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  train_selecionado["idade_missing"] = train_selecionado["idade"].isna().astype(int)
+
+2025-08-11 16:57:17,743:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-11 16:57:17,743:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-11 16:57:17,744:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-11 16:57:17,744:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-11 16:57:25,774:WARNING:/home/spark-e0762d6f-5e97-4a3e-80dc-65/.ipykernel/16753/command-5673609478037084-1407327369:47: UserWarning: FixedFormatter should only be used together with FixedLocator
+  ax1.set_xticklabels(safra_stats[safra_col].astype(str), rotation=45)
+
+2025-08-11 16:58:18,048:WARNING:/home/spark-e0762d6f-5e97-4a3e-80dc-65/.ipykernel/16753/command-8722994656789697-3974294902:5: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  train_selecionado["idade_missing"] = train_selecionado["idade"].isna().astype(int)
+
+2025-08-12 10:22:24,234:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 10:22:24,235:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 10:22:24,235:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 10:22:24,235:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 10:26:29,309:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 10:26:29,312:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 10:26:29,315:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 10:26:29,316:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 10:37:20,126:WARNING:<string>:21: UserWarning: FixedFormatter should only be used together with FixedLocator
+
+2025-08-12 10:41:10,237:WARNING:/home/spark-474b3fa1-6890-4b0a-a032-85/.ipykernel/12072/command-8722994656789697-3974294902:5: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  train_selecionado["idade_missing"] = train_selecionado["idade"].isna().astype(int)
+
+2025-08-12 18:18:22,100:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 18:18:22,102:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 18:18:22,103:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 18:18:22,104:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 18:53:32,541:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 18:53:32,544:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 18:53:32,545:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 18:53:32,545:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 18:53:40,764:WARNING:/Workspace/Users/rodrigonanosys@gmail.com/ifood-case/notebooks/../src/funcoes_.py:235: UserWarning: FixedFormatter should only be used together with FixedLocator
+  ax1.set_xticklabels(safra_stats[safra_col].astype(str), rotation=45)
+
+2025-08-12 22:03:45,402:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 22:03:45,402:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 22:03:45,403:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2025-08-12 22:03:45,403:WARNING:
+'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.

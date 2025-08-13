@@ -1,6 +1,800 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import pandas as pd
+import lightgbm as lgb
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import itertools
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import roc_auc_score
+import lightgbm as lgb
+from typing import Dict, List, Tuple
+from typing import Optional
+import os
+import json
+import joblib
+import lightgbm as lgb
+from datetime import datetime
+from typing import Dict, Tuple
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, roc_auc_score
+
+def avaliar_modelo_roc(df_train: pd.DataFrame,
+                       df_test: pd.DataFrame,
+                       score_col: str,
+                       target_col: str,
+                       title: str = "ROC Curve - Train vs Test"):
+    """
+    Plota ROC e retorna métricas (AUC e Gini) para treino e teste.
+
+    Parâmetros
+    ----------
+    df_train, df_test : DataFrames com as colunas de score e target
+    score_col : nome da coluna de score (probabilidade do classe 1)
+    target_col: nome da coluna target (binário: 0/1)
+    title     : título do gráfico
+
+    Retorno
+    -------
+    metrics : dict com AUC e Gini de train e test
+    """
+
+    # --------- validações leves ---------
+    for name, df in [("train", df_train), ("test", df_test)]:
+        if score_col not in df.columns or target_col not in df.columns:
+            raise ValueError(f"[{name}] faltam colunas '{score_col}' ou '{target_col}'")
+        # target binário?
+        vals = set(pd.Series(df[target_col]).dropna().unique().tolist())
+        if not vals.issubset({0, 1}):
+            raise ValueError(f"[{name}] target '{target_col}' deve ser binário (0/1). Valores: {vals}")
+
+    # --------- preparar dados ---------
+    def _prep(df):
+        y = df[target_col].astype(int).values
+        s = pd.to_numeric(df[score_col], errors="coerce").values
+        mask = ~np.isnan(s)
+        y, s = y[mask], s[mask]
+        # opcional: clipe scores para [0,1] se houver ruído numérico
+        s = np.clip(s, 0, 1)
+        return y, s
+
+    y_tr, s_tr = _prep(df_train)
+    y_te, s_te = _prep(df_test)
+
+    # --------- métricas ---------
+    auc_tr = roc_auc_score(y_tr, s_tr)
+    auc_te = roc_auc_score(y_te, s_te)
+    gini_tr = 2*auc_tr - 1
+    gini_te = 2*auc_te - 1
+
+    fpr_tr, tpr_tr, _ = roc_curve(y_tr, s_tr)
+    fpr_te, tpr_te, _ = roc_curve(y_te, s_te)
+
+    # --------- plot ---------
+    plt.figure(figsize=(7, 5))
+    plt.plot(fpr_tr, tpr_tr, label=f"Train AUC={auc_tr:.3f} | Gini={gini_tr:.3f}", lw=2)
+    plt.plot(fpr_te, tpr_te, label=f"Test  AUC={auc_te:.3f} | Gini={gini_te:.3f}", lw=2, linestyle="--")
+    plt.plot([0,1], [0,1], color="gray", lw=1, linestyle=":")
+    plt.title(title)
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.legend(loc="lower right")
+    plt.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+    return {
+        "train": {"auc": float(auc_tr), "gini": float(gini_tr)},
+        "test":  {"auc": float(auc_te), "gini": float(gini_te)}
+    }
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+def plot_ks_prob_side_by_side(df_train, df_test, score_col, target_col, title="KS Curve - Probabilidade"):
+    """
+    Plota curvas KS (eixo X = probabilidade prevista, 0→1) para Treino e Teste lado a lado.
+    Retorna dict com KS e a probabilidade p* onde o KS é máximo em cada base.
+    """
+
+    def ks_frame_prob(df):
+        d = df[[score_col, target_col]].copy()
+        d[score_col] = pd.to_numeric(d[score_col], errors="coerce").clip(0, 1)
+        d = d.dropna(subset=[score_col, target_col])
+
+        # ordenar crescente p/ começar em 0
+        d = d.sort_values(score_col, ascending=True).reset_index(drop=True)
+
+        pos_tot = max(int((d[target_col] == 1).sum()), 1)
+        neg_tot = max(int((d[target_col] == 0).sum()), 1)
+
+        d["pos_acum"] = (d[target_col] == 1).cumsum() / pos_tot
+        d["neg_acum"] = (d[target_col] == 0).cumsum() / neg_tot
+        d["ks"] = (d["pos_acum"] - d["neg_acum"]).abs()
+
+        ks_idx = int(d["ks"].values.argmax())
+        ks_val = float(d.loc[ks_idx, "ks"])
+        p_star = float(d.loc[ks_idx, score_col])                 # probabilidade onde KS é máximo
+        pos_at_p = float(d.loc[ks_idx, "pos_acum"])
+        neg_at_p = float(d.loc[ks_idx, "neg_acum"])
+        return d, ks_val, p_star, pos_at_p, neg_at_p, ks_idx
+
+    tr, ks_tr, p_tr, pos_tr, neg_tr, idx_tr = ks_frame_prob(df_train)
+    te, ks_te, p_te, pos_te, neg_te, idx_te = ks_frame_prob(df_test)
+
+    # ---- plot ----
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
+    for ax, d, ks_val, p_star, pos_at_p, neg_at_p, idx, nome in [
+        (axes[0], tr, ks_tr, p_tr, pos_tr, neg_tr, idx_tr, "Treino"),
+        (axes[1], te, ks_te, p_te, pos_te, neg_te, idx_te, "Teste"),
+    ]:
+        ax.plot(d[score_col], d["pos_acum"], label="Positivos acumulados", color="#1f77b4", lw=1.8)
+        ax.plot(d[score_col], d["neg_acum"], label="Negativos acumulados", color="#d62728", lw=1.8)
+
+        # linha vertical e marcação do ponto p*
+        ax.axvline(x=p_star, color="#2ca02c", linestyle="--", lw=1.3, label=f"KS = {ks_val:.3f}")
+        ax.scatter([p_star, p_star], [pos_at_p, neg_at_p], color=["#1f77b4","#d62728"], zorder=3)
+        ax.text(p_star, 1.02, f"p*={p_star:.3f}", ha="center", va="bottom", fontsize=9, color="#2ca02c")
+
+        ax.set_title(f"{nome} — KS: {ks_val:.3f}")
+        ax.set_xlabel("Probabilidade prevista")
+        ax.grid(alpha=0.3)
+
+    axes[0].set_ylabel("Acumulado")
+    axes[0].legend(loc="lower right")
+    axes[1].legend(loc="lower right")
+    fig.suptitle(title, fontsize=15)
+    plt.tight_layout()
+    plt.show()
+
+    return {
+        "train": {"KS": ks_tr, "prob_ks_max": p_tr, "pos_acum_at_p": pos_tr, "neg_acum_at_p": neg_tr},
+        "test":  {"KS": ks_te, "prob_ks_max": p_te, "pos_acum_at_p": pos_te, "neg_acum_at_p": neg_te},
+    }
+
+
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
+
+def avaliar_por_limiar(df_train, df_test, score_col, target_col, limiar=0.5):
+    """
+    Avalia métricas de classificação para um limiar específico no score.
+    Retorna DataFrame com métricas para treino e teste.
+
+    Parâmetros:
+    -----------
+    df_train, df_test : pd.DataFrame
+        DataFrames contendo as colunas de score e target.
+    score_col : str
+        Nome da coluna com os scores (probabilidades preditas).
+    target_col : str
+        Nome da coluna com o target binário (0 ou 1).
+    limiar : float
+        Valor de corte entre 0 e 1 para classificar como positivo.
+
+    Retorna:
+    --------
+    pd.DataFrame com métricas.
+    """
+    
+    def calc_metrics(df, nome_base):
+        y_true = df[target_col]
+        y_score = df[score_col]
+        y_pred = (y_score >= limiar).astype(int)
+
+        acc = accuracy_score(y_true, y_pred)
+        prec = precision_score(y_true, y_pred, zero_division=0)
+        rec = recall_score(y_true, y_pred)
+        f1 = f1_score(y_true, y_pred)
+        auc = roc_auc_score(y_true, y_score)
+
+        # KS
+        df_temp = df[[score_col, target_col]].copy()
+        df_temp = df_temp.sort_values(by=score_col, ascending=False)
+        df_temp["cum_eventos"] = (df_temp[target_col] == 1).cumsum() / (df_temp[target_col] == 1).sum()
+        df_temp["cum_nao_eventos"] = (df_temp[target_col] == 0).cumsum() / (df_temp[target_col] == 0).sum()
+        ks = np.max(np.abs(df_temp["cum_eventos"] - df_temp["cum_nao_eventos"]))
+
+        gini = 2 * auc - 1
+
+        tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+
+        return {
+            "Nome da Base": nome_base,
+            "Acurácia": acc,
+            "Precisão": prec,
+            "Recall": rec,
+            "F1-score": f1,
+            "AUC": auc,
+            "KS MAX": ks,
+            "GINI": gini,
+            "TP": tp,
+            "FP": fp,
+            "TN": tn,
+            "FN": fn
+        }
+    
+    resultados = []
+    resultados.append(calc_metrics(df_train, "Treino"))
+    resultados.append(calc_metrics(df_test, "Teste"))
+    
+    return pd.DataFrame(resultados)
+
+def plot_confusion_from_metrics(metrics_df):
+    """
+    Plota matrizes de confusão para Treino e Teste lado a lado,
+    usando os valores de TP, FP, TN, FN já presentes no dataframe de métricas.
+    
+    Parâmetros:
+    - metrics_df: DataFrame com colunas ['Nome da Base','TP','FP','TN','FN']
+    """
+    
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+
+    for i, ax in enumerate(axes):
+        row = metrics_df.iloc[i]
+        cm = [
+            [row['TN'], row['FP']],
+            [row['FN'], row['TP']]
+        ]
+        
+        sns.heatmap(
+            cm,
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            xticklabels=["Prev. Negativo", "Prev. Positivo"],
+            yticklabels=["Real Negativo", "Real Positivo"],
+            ax=ax
+        )
+        ax.set_title(f"{row['Nome da Base']} - Limiar Atual")
+        ax.set_xlabel("Previsão")
+        ax.set_ylabel("Real")
+    
+    plt.tight_layout()
+    plt.show()
+
+# =========================
+# Funções utilitárias
+# =========================
+# ---------- utilitários ----------
+
+def _detectar_categoricas(X: pd.DataFrame):
+    return X.select_dtypes(include=['object', 'category']).columns.tolist()
+
+def _padronizar_categorias_para_fit(X: pd.DataFrame, categorical_cols: List[str]):
+    X_conv = X.copy()
+    categorias_map = {}
+    for c in categorical_cols:
+        if X_conv[c].dtype == 'object':
+            X_conv[c] = X_conv[c].astype('category')
+        elif X_conv[c].dtype.name != 'category':
+            X_conv[c] = X_conv[c].astype('category')
+        categorias_map[c] = X_conv[c].cat.categories.tolist()
+    return X_conv, categorias_map
+
+def _alinhar_colunas_para_predict(X: pd.DataFrame, features_treino: list):
+    X_alinhado = X.copy()
+    faltantes = [c for c in features_treino if c not in X_alinhado.columns]
+    for c in faltantes:
+        X_alinhado[c] = np.nan
+    sobras = [c for c in X_alinhado.columns if c not in features_treino]
+    if sobras:
+        X_alinhado = X_alinhado.drop(columns=sobras)
+    return X_alinhado[features_treino]
+
+def _aplicar_categorias_salvas(X: pd.DataFrame, categorias_map: Dict[str, list]):
+    X_conv = X.copy()
+    for c, cats in categorias_map.items():
+        if c in X_conv.columns:
+            X_conv[c] = X_conv[c].astype('category')
+            X_conv[c] = X_conv[c].cat.set_categories(cats)
+    return X_conv
+
+# ---------- 1) Treinar, escorar e salvar ----------
+def treinar_e_salvar_modelo_lgbm(
+    parametros_escolhidos: Dict,
+    train_tratado: pd.DataFrame,   # base ORIGINAL (com IDs, explicativas e target)
+    target: str,
+    path: str,
+    score_col: str = 'score_modelo',
+    id_cols: List[str] = None      # <--- NOVO: colunas para manter no escore, mas excluir do treino
+) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """
+    Treina LGBMClassifier, gera importâncias, escora e salva artefatos.
+    - 'id_cols' são mantidas no 'train_escorado' e excluídas do treino.
+    Retorna: (importance_df, train_escorado_completo, modelo_pkl)
+    """
+    os.makedirs(path, exist_ok=True)
+    id_cols = id_cols or []
+
+    # separa X e y (features = tudo menos target e ids)
+    features = [c for c in train_tratado.columns if c not in id_cols + [target]]
+    X = train_tratado[features].copy()
+    y = train_tratado[target].astype(int).values
+
+    # categorias
+    categorical_cols = _detectar_categoricas(X)
+    X_fit, categorias_map = _padronizar_categorias_para_fit(X, categorical_cols)
+
+    # modelo
+    model = lgb.LGBMClassifier(**parametros_escolhidos)
+    model.fit(X_fit, y, categorical_feature=categorical_cols)
+
+    # importâncias
+    booster = model.booster_
+    importance_df = pd.DataFrame({
+        'feature': booster.feature_name(),
+        'gain': booster.feature_importance(importance_type='gain'),
+        'split': booster.feature_importance(importance_type='split')
+    }).sort_values('gain', ascending=False).reset_index(drop=True)
+
+    # escora o TREINO nas MESMAS features
+    proba = model.predict_proba(X_fit)[:, 1]
+
+    # monta o train_escorado como a BASE ORIGINAL COMPLETA + score
+    train_escorado = train_tratado.copy()
+    train_escorado[score_col] = proba
+
+    # salvar csvs
+    importance_df.to_csv(os.path.join(path, 'feature_importance.csv'), index=False)
+    train_escorado.to_csv(os.path.join(path, 'train_escorado.csv'), index=False)
+
+    # metadados (salvos dentro do pkl)
+    meta = {
+        'features': features,
+        'categorical_cols': categorical_cols,
+        'categorias_map': categorias_map,
+        'target': target,
+        'score_col': score_col,
+        'id_cols': id_cols,
+        'parametros_escolhidos': parametros_escolhidos,
+        'treinado_em': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+    with open(os.path.join(path, 'metadata.json'), 'w', encoding='utf-8') as f:
+        json.dump({k: v for k, v in meta.items() if k != 'categorias_map'}, f, ensure_ascii=False, indent=2)
+
+    modelo_pkl = {'model': model, 'meta': meta}
+    joblib.dump(modelo_pkl, os.path.join(path, 'model.pkl'))
+
+    return importance_df, train_escorado, modelo_pkl
+
+# ---------- 2) Carregar e aplicar no teste ----------
+def aplicar_modelo_pkl(
+    df_teste: pd.DataFrame,   # base ORIGINAL de teste (com IDs, só não precisa ter o target)
+    path: str,
+    score_col: str = 'score_modelo'
+) -> pd.DataFrame:
+    """
+    Carrega model.pkl, alinha colunas/categorias e escora df_teste.
+    Retorna df_teste COMPLETO + coluna 'score_col'.
+    """
+    bundle = joblib.load(os.path.join(path, 'model.pkl'))
+    model = bundle['model']
+    meta = bundle['meta']
+
+    features_treino = meta['features']
+    categorias_map = meta.get('categorias_map', {})
+    categorical_cols = meta.get('categorical_cols', [])
+    score_col = meta.get('score_col', score_col)
+
+    # prepara X a partir do df_teste (mantendo df original para retorno)
+    X = df_teste.copy()
+
+    # garante dtype e ordem das features de treino
+    for c in categorical_cols:
+        if c in X.columns:
+            if X[c].dtype == 'object':
+                X[c] = X[c].astype('category')
+            elif X[c].dtype.name != 'category':
+                X[c] = X[c].astype('category')
+
+    X = _alinhar_colunas_para_predict(X, features_treino)
+    X = _aplicar_categorias_salvas(X, categorias_map)
+
+    proba = model.predict_proba(X)[:, 1]
+
+    df_escorado = df_teste.copy()
+    df_escorado[score_col] = proba
+    return df_escorado
+
+def matriz_correlacao(df: pd.DataFrame) -> None:
+
+    import seaborn as sns
+    """
+    Plota uma matriz de correlação de Pearson para variáveis numéricas.
+
+    Parâmetros:
+    df (pd.DataFrame): DataFrame contendo os dados.
+    """
+    df_numeric = df.select_dtypes(include=[np.number])
+
+    if df_numeric.empty:
+        print("⚠️ Nenhuma variável numérica para calcular correlação.")
+        return
+
+    plt.figure(figsize=(10, 6))
+    sns.heatmap(df_numeric.corr(), annot=True,
+                cmap="coolwarm", fmt=".2f", linewidths=0.5)
+    plt.title("Matriz de Correlação de Pearson")
+    plt.show()
+
+def plot_safra_conversion_rate(
+    df: pd.DataFrame,
+    safra_col: str = "safra",
+    conversao_col: str = "y",
+    conv_rate_min: Optional[float] = None,
+    conv_rate_max: Optional[float] = None
+) -> pd.DataFrame:
+    """
+    Gera um gráfico de barras com a contagem por safra e
+    uma linha com a taxa de conversão no eixo secundário.
+
+    Retorna:
+    - DataFrame com: safra, contagem, total_convertidos, total_nao_convertidos, conversion_rate.
+    """
+    import matplotlib.pyplot as plt
+    from typing import Optional
+    import pandas as pd
+
+    # Garantir que safra seja numérica para ordenação
+    df[safra_col] = pd.to_numeric(df[safra_col], errors="coerce")
+
+    # Agrupar e ordenar
+    safra_stats = (
+        df.groupby(safra_col)
+        .agg(
+            contagem=(conversao_col, "count"),
+            total_convertidos=(conversao_col, "sum")
+        )
+        .reset_index()
+        .sort_values(safra_col)
+    )
+
+    # Calcular não convertidos e taxa
+    safra_stats["total_nao_convertidos"] = safra_stats["contagem"] - safra_stats["total_convertidos"]
+    safra_stats["conversion_rate"] = safra_stats["total_convertidos"] / safra_stats["contagem"]
+
+    # Criar gráfico
+    fig, ax1 = plt.subplots(figsize=(10, 5))
+
+    # Barras - total
+    ax1.bar(safra_stats[safra_col].astype(str), safra_stats["contagem"],
+            color="blue", alpha=0.6, label="Total")
+    ax1.set_xlabel("Safra")
+    ax1.set_ylabel("Total de IDs", color="blue")
+    ax1.tick_params(axis="y", labelcolor="blue")
+    ax1.set_xticklabels(safra_stats[safra_col].astype(str), rotation=45)
+
+    # Linha - taxa de conversão
+    ax2 = ax1.twinx()
+    ax2.plot(safra_stats[safra_col].astype(str), safra_stats["conversion_rate"],
+             color="green", marker="o", linestyle="-", linewidth=2, label="Taxa de Conversão")
+    ax2.set_ylabel("Taxa de Conversão (%)", color="green")
+    ax2.tick_params(axis="y", labelcolor="green")
+
+    # Limites opcionais do eixo secundário
+    if conv_rate_min is not None and conv_rate_max is not None:
+        ax2.set_ylim(conv_rate_min, conv_rate_max)
+
+    plt.title("Total por Safra e Taxa de Conversão")
+    fig.tight_layout()
+    plt.show()
+
+    return safra_stats
+
+
+def grid_search_inteligente_lgbm_gini(
+    df: pd.DataFrame,
+    target: str,
+    categorical_cols: List[str] = None,
+    cv_splits: int = 5,
+    early_stopping_rounds: int = 100,
+    max_combinations: int = 60,   # limita busca para não explodir tempo
+    random_state: int = 42,
+    verbose: int = 1
+) -> Tuple[Dict, pd.DataFrame]:
+    """
+    Faz um grid search 'inteligente' de hiperparâmetros do LightGBM otimizando o Gini (2*AUC - 1),
+    com validação cruzada estratificada e early stopping por fold.
+
+    Parâmetros
+    ----------
+    df : DataFrame com explicativas + target
+    target : nome da coluna alvo (binária 0/1)
+    categorical_cols : lista opcional de colunas categóricas (se None, detecta automaticamente)
+    cv_splits : nº de folds (default 5)
+    early_stopping_rounds : paciência do early stopping por fold
+    max_combinations : nº máximo de combinações a avaliar (amostra se o grid exceder isso)
+    random_state : semente
+    verbose : 0 silencioso, 1 progresso básico
+
+    Retorna
+    -------
+    best_params : dict com os melhores hiperparâmetros (inclui n_estimators recomendado)
+    historico_df : DataFrame com resultados por combinação (gini_mean, gini_std, etc.)
+    """
+
+    rng = np.random.RandomState(random_state)
+
+    # === 1) separa X, y e trata categorias ===
+    features = [c for c in df.columns if c != target]
+    X = df[features].copy()
+    y = df[target].astype(int).values
+
+    if categorical_cols is None:
+        categorical_cols = X.select_dtypes(include=['category', 'object']).columns.tolist()
+    # Converte objetos para category (LightGBM lida nativamente)
+    for c in categorical_cols:
+        if X[c].dtype == 'object':
+            X[c] = X[c].astype('category')
+
+    # === 2) base de parâmetros "fixos" e medidas de desbalanceamento ===
+    pos = y.sum()
+    neg = len(y) - pos
+    base_params = {
+        'objective': 'binary',        # modelo de classificação binária
+        'boosting_type': 'gbdt',      # Gradient Boosted Decision Trees
+        'random_state': random_state,
+        'n_jobs': -1
+    }
+    # Se muito desbalanceado, usa scale_pos_weight ~ (neg/pos)
+    if pos > 0 and neg / max(pos, 1) >= 3:
+        base_params['scale_pos_weight'] = neg / max(pos, 1)
+
+    # === 3) grade de hiperparâmetros (valores que "fazem sentido") ===
+    # Comentários do porquê de cada um:
+    param_grid = {
+        # taxa de aprendizado: menor -> mais árvores, maior estabilidade; maior -> converge rápido, risco overfit
+        'learning_rate': [0.01, 0.05, 0.1],
+        # controle do tamanho das folhas: mais folhas capturam interações complexas, mas podem overfit
+        'num_leaves': [31, 63, 127],
+        # profundidade máxima: -1 = ilimitado; valores moderados ajudam a regularizar
+        'max_depth': [-1, 6, 8, 10],
+        # amostra mínima por folha: maior -> mais suave/regularizado
+        'min_child_samples': [20, 50, 100],
+        # amostragem de linhas por árvore (bagging): <1 ajuda a reduzir variância
+        'subsample': [0.7, 0.9, 1.0],
+        # amostragem de colunas por árvore: <1 ajuda a reduzir correlação entre árvores
+        'colsample_bytree': [0.7, 0.9, 1.0],
+        # L1 e L2, penalizações que ajudam a controlar complexidade
+        'reg_alpha': [0.0, 0.1, 0.5],
+        'reg_lambda': [0.0, 0.1, 0.5],
+        # ganho mínimo para dividir (split) — aumenta a exigência para criar novas folhas
+        'min_split_gain': [0.0, 0.1]
+    }
+
+    # Cria todas as combinações e filtra algumas inviáveis
+    all_keys = list(param_grid.keys())
+    all_values = list(param_grid.values())
+    combos = []
+    for values in itertools.product(*all_values):
+        params = dict(zip(all_keys, values))
+        # regra prática: se max_depth > 0, manter num_leaves <= 2**max_depth
+        if params['max_depth'] > 0 and params['num_leaves'] > 2 ** params['max_depth']:
+            continue
+        combos.append(params)
+
+    # Amostra se exceder max_combinations (mantém "inteligente" e viável)
+    if len(combos) > max_combinations:
+        idx = rng.choice(len(combos), size=max_combinations, replace=False)
+        combos = [combos[i] for i in idx]
+
+    if verbose:
+        print(f"Total de combinações a avaliar: {len(combos)}")
+
+    # === 4) validação cruzada com early stopping por fold ===
+    skf = StratifiedKFold(n_splits=cv_splits, shuffle=True, random_state=random_state)
+    resultados = []
+    best = {'gini_mean': -np.inf, 'params': None, 'best_iters': None}
+
+    for i, params in enumerate(combos, 1):
+        if verbose:
+            print(f"[{i}/{len(combos)}] Testando params: {params}")
+
+        ginis_fold = []
+        best_iters = []
+
+        for fold, (tr_idx, va_idx) in enumerate(skf.split(X, y), 1):
+            X_tr, X_va = X.iloc[tr_idx], X.iloc[va_idx]
+            y_tr, y_va = y[tr_idx], y[va_idx]
+
+            model = lgb.LGBMClassifier(
+                n_estimators=5000,            # grande o suficiente; early stopping decide o melhor
+                **base_params,
+                **params
+            )
+
+            model.fit(
+                X_tr, y_tr,
+                eval_set=[(X_va, y_va)],
+                eval_metric='auc',
+                categorical_feature=categorical_cols,
+                callbacks=[lgb.early_stopping(early_stopping_rounds, verbose=False)]
+            )
+
+            # probabilidade positiva usando melhor iteração encontrada no fold
+            y_pred = model.predict_proba(X_va, num_iteration=model.best_iteration_)[:, 1]
+            auc = roc_auc_score(y_va, y_pred)
+            gini = 2 * auc - 1
+            ginis_fold.append(gini)
+            best_iters.append(model.best_iteration_)
+
+        gini_mean = float(np.mean(ginis_fold))
+        gini_std = float(np.std(ginis_fold, ddof=1))
+
+        resultados.append({
+            **params,
+            'gini_mean': gini_mean,
+            'gini_std': gini_std,
+            'best_iter_mean': int(np.round(np.mean(best_iters))),
+            'best_iter_median': int(np.median(best_iters))
+        })
+
+        if gini_mean > best['gini_mean']:
+            best = {
+                'gini_mean': gini_mean,
+                'params': params,
+                'best_iters': best_iters
+            }
+
+    historico_df = pd.DataFrame(resultados).sort_values('gini_mean', ascending=False).reset_index(drop=True)
+
+    # === 5) monta best_params final, sugerindo n_estimators ~ média das melhores iterações ===
+    best_n_estimators = int(np.round(np.mean(best['best_iters']))) if best['best_iters'] else 500
+    best_params = {
+        **base_params,
+        **best['params'],
+        'n_estimators': best_n_estimators,
+        # dica: ao treinar final, mantenha early stopping e um n_estimators maior (ex.: 2x)
+        'sugestao_treino_final': {
+            'n_estimators_sugerido': int(best_n_estimators * 2),
+            'usar_early_stopping_rounds': early_stopping_rounds
+        },
+        'cv_gini_mean': best['gini_mean']
+    }
+
+    if verbose:
+        print("\nMelhores hiperparâmetros (por Gini médio em CV):")
+        print(best_params)
+
+    return best_params, historico_df
+
+
+def eliminacao_progressiva_por_importancia(
+    df, colunas_id, target, 
+    min_features=1, max_steps=None, 
+    plot=True
+):
+    """
+    Executa eliminação progressiva de variáveis usando a função
+    modelar_lightgbm_feature_selection. Em cada etapa treina, mede KS/Gini,
+    salva a lista de variáveis utilizadas e remove a variável de menor ganho.
+
+    Retorna:
+        resultados_df (pd.DataFrame) com colunas:
+            ETAPA, QTD_VARIAVEL, GINI, KS, VARIAVEIS_EXPLICATIVAS
+        figs (dict) com figuras de KS e Gini por etapa, se plot=True.
+    """
+    current_features = [c for c in df.columns if c not in colunas_id + [target]]
+    
+    resultados = []
+    etapa = 0
+    figs = {}
+
+    while len(current_features) >= max(min_features, 1):
+        if (max_steps is not None) and (etapa >= max_steps):
+            break
+
+        etapa += 1
+
+        cols_rodada = colunas_id + [target] + current_features
+        df_step = df[cols_rodada].copy()
+
+        nova_lista, ks, gini = modelar_lightgbm_feature_selection(df_step, colunas_id, target)
+
+        resultados.append({
+            'ETAPA': etapa,
+            'QTD_VARIAVEL': len(current_features),
+            'GINI': gini,
+            'KS': ks,
+            'VARIAVEIS_EXPLICATIVAS': current_features.copy()
+        })
+
+        current_features = nova_lista
+        if len(current_features) < max(min_features, 1):
+            break
+
+    resultados_df = pd.DataFrame(resultados)
+
+    if plot and not resultados_df.empty:
+        # KS por etapa
+        fig_ks, ax_ks = plt.subplots(figsize=(7, 4))
+        ax_ks.plot(resultados_df['ETAPA'], resultados_df['KS'], marker='o', color='#1f77b4')
+        ax_ks.set_title('KS por Etapa')
+        ax_ks.set_xlabel('Etapa')
+        ax_ks.set_ylabel('KS')
+        ax_ks.grid(True, alpha=0.3)
+        for x, ks_val, q in zip(resultados_df['ETAPA'], resultados_df['KS'], resultados_df['QTD_VARIAVEL']):
+            ax_ks.annotate(f'n={q}', (x, ks_val), textcoords="offset points", xytext=(0,8), ha='center', fontsize=8)
+
+        # Gini por etapa
+        fig_gini, ax_gini = plt.subplots(figsize=(7, 4))
+        ax_gini.plot(resultados_df['ETAPA'], resultados_df['GINI'], marker='o', color='#d62728')
+        ax_gini.set_title('Gini por Etapa')
+        ax_gini.set_xlabel('Etapa')
+        ax_gini.set_ylabel('Gini')
+        ax_gini.grid(True, alpha=0.3)
+        for x, g_val, q in zip(resultados_df['ETAPA'], resultados_df['GINI'], resultados_df['QTD_VARIAVEL']):
+            ax_gini.annotate(f'n={q}', (x, g_val), textcoords="offset points", xytext=(0,8), ha='center', fontsize=8)
+
+        figs = {'ks': fig_ks, 'gini': fig_gini}
+
+    return resultados_df, figs
+
+
+def modelar_lightgbm_feature_selection(df, colunas_id, target):
+    features = [col for col in df.columns if col not in colunas_id + [target]]
+    X = df[features]
+    y = df[target]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.3, random_state=42, stratify=y
+    )
+
+    categorical_features = X_train.select_dtypes(include=['category', 'object']).columns.tolist()
+
+    lgb_train = lgb.Dataset(X_train, label=y_train, categorical_feature=categorical_features)
+    lgb_test = lgb.Dataset(X_test, label=y_test, categorical_feature=categorical_features, reference=lgb_train)
+
+    params = {
+        'objective': 'binary',
+        'metric': 'auc',
+        'verbosity': -1,
+        'boosting_type': 'gbdt',
+        'seed': 42
+    }
+
+    model = lgb.train(
+        params,
+        lgb_train,
+        valid_sets=[lgb_train, lgb_test],
+        num_boost_round=100,
+        callbacks=[
+            lgb.early_stopping(stopping_rounds=10, verbose=False)
+        ]
+    )
+
+    importance_df = pd.DataFrame({
+        'feature': model.feature_name(),
+        'gain': model.feature_importance(importance_type='gain')
+    }).sort_values(by='gain', ascending=False).reset_index(drop=True)
+
+    menor_importancia = importance_df.iloc[-1]['feature']
+    nova_lista_features = [f for f in features if f != menor_importancia]
+
+    y_pred = model.predict(X_test, num_iteration=model.best_iteration)
+
+    df_ks = pd.DataFrame({'y': y_test, 'y_pred': y_pred})
+    df_ks = df_ks.sort_values(by='y_pred', ascending=False)
+    df_ks['cum_event'] = (df_ks['y'] == 1).cumsum()
+    df_ks['cum_non_event'] = (df_ks['y'] == 0).cumsum()
+    total_event = (df_ks['y'] == 1).sum()
+    total_non_event = (df_ks['y'] == 0).sum()
+    df_ks['tpr'] = df_ks['cum_event'] / total_event
+    df_ks['fpr'] = df_ks['cum_non_event'] / total_non_event
+    ks = max(df_ks['tpr'] - df_ks['fpr'])
+
+    auc = roc_auc_score(y_test, y_pred)
+    gini = 2 * auc - 1
+
+    return nova_lista_features, ks, gini
+
 
 def build_missing_plan():
     rows = [
@@ -12,7 +806,7 @@ def build_missing_plan():
         ("target_sucesso","target","none","rótulo"),
 
         # ——— Perfil ———
-        ("idade","numérica_contínua","-1","ausência informativa (criar flag_miss)"),
+        ("idade","numérica_contínua","mediana","ausência informativa (criar flag_miss)"),
         ("genero","categórica","MISSING","não informado tem significado"),
         ("limite_credito","numérica_contínua","mediana","distribuição assimétrica"),
         ("safra_registro","categórica","MISSING","categoria faltante explícita"),
@@ -479,3 +1273,101 @@ def quase_constantes(df, cols, thresh=0.99):
         if top_frac >= thresh:
             out.append((c, round(top_frac,4)))
     return pd.DataFrame(out, columns=["variavel","frac_modal"]).sort_values("frac_modal", ascending=False)
+
+def perfil_base_conversao(
+    base_modelo: pd.DataFrame,
+    id_col: str,
+    target_col: str,
+    safra_col: str
+) -> dict:
+    """
+    Calcula métricas básicas do perfil da base de dados focada em conversão.
+
+    Parâmetros:
+    - base_modelo (pd.DataFrame): DataFrame contendo os dados a serem analisados.
+    - id_col (str): Nome da coluna que representa o identificador único (ID).
+    - target_col (str): Nome da coluna que representa a variável alvo (1 = convertido, 0 = não convertido).
+    - safra_col (str): Nome da coluna que representa a safra.
+
+    Retorna:
+    - dict: Dicionário contendo:
+        - shape: Tupla com a quantidade de linhas e colunas.
+        - tipos_variaveis: Contagem dos tipos das variáveis.
+        - ids_unicos: Quantidade de IDs únicos.
+        - taxa_conversao: Taxa de conversão da base.
+        - volumetria_safras: Quantidade de registros por safra.
+    """
+    perfil = {}
+
+    # 1. Shape da base
+    perfil['shape'] = f"Essa base possui {base_modelo.shape[0]} linhas e {base_modelo.shape[1]} colunas"
+
+    # 2. Tipos das variáveis
+    perfil['tipos_variaveis'] = base_modelo.dtypes.value_counts().to_dict()
+
+    # 3. IDs únicos
+    perfil['ids_unicos'] = base_modelo[id_col].nunique()
+
+    # 4. Taxa de conversão
+    if target_col in base_modelo.columns:
+        total_conversoes = base_modelo[target_col].value_counts().to_dict()
+
+        # Evitar KeyError se faltar alguma das classes
+        nao_convertidos = total_conversoes.get(0, 0)
+        convertidos = total_conversoes.get(1, 0)
+
+        taxa_conv = convertidos / (nao_convertidos + convertidos) if (nao_convertidos + convertidos) > 0 else 0
+
+        perfil['taxa_conversao'] = {
+            "não_convertidos": nao_convertidos,
+            "convertidos": convertidos,
+            "taxa_percentual": round(taxa_conv * 100, 2)
+        }
+    else:
+        perfil['taxa_conversao'] = "Coluna alvo não encontrada."
+
+    # 5. Volumetria por safra
+    if safra_col in base_modelo.columns:
+        perfil['volumetria_safras'] = dict(
+            sorted(base_modelo[safra_col].value_counts().to_dict().items())
+        )
+    else:
+        perfil['volumetria_safras'] = "Coluna safra não encontrada."
+
+    # Prints amigáveis
+    print("📊 Perfil da base de dados (Conversão)")
+    print(f"Shape da base: {perfil['shape']}")
+    print(f"Tipos de variáveis: {perfil['tipos_variaveis']}")
+    print(f"IDs únicos: {perfil['ids_unicos']}")
+    if isinstance(perfil['taxa_conversao'], dict):
+        print(f"Taxa de conversão: {perfil['taxa_conversao']['taxa_percentual']}% "
+              f"({perfil['taxa_conversao']['convertidos']} convertidos, "
+              f"{perfil['taxa_conversao']['não_convertidos']} não convertidos)")
+    else:
+        print(f"Taxa de conversão: {perfil['taxa_conversao']}")
+    print(f"Volumetria das safras: {perfil['volumetria_safras']}")
+    print("\n")
+
+    return perfil
+
+def aplicar_dtypes(df: pd.DataFrame, dtypes_dict: dict) -> pd.DataFrame:
+    """
+    Aplica conversão de tipos de colunas conforme dicionário {coluna: dtype}.
+    
+    Parâmetros:
+    - df: DataFrame original
+    - dtypes_dict: dicionário com {coluna: tipo_pandas}
+    
+    Retorna:
+    - DataFrame com os tipos ajustados
+    """
+    for col, dtype in dtypes_dict.items():
+        if col in df.columns:
+            try:
+                if dtype == "category":
+                    df[col] = df[col].astype("category")
+                else:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").astype(dtype) if "float" in dtype or "int" in dtype else df[col].astype(dtype)
+            except Exception as e:
+                print(f"[AVISO] Não foi possível converter coluna '{col}' para {dtype}: {e}")
+    return df
