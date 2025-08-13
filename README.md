@@ -15,7 +15,6 @@
 
 7 - Para modelagem rode o 2_modeling.ipynb <br>
 
----------------------------------------------------------####---------------------------------------------------------
 ## Opção 2
 Caso queira baixar em seu ambiente local(näo recomendado) <br>
 lembre que vc vai precisar ter o spark instalado localmente para rodar o notebook 1_data_processing.ipynb<br>
